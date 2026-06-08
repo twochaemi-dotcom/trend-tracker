@@ -119,8 +119,8 @@ items.sort(key=lambda x: x.pubDate, reverse=True)
 
 # 새 RSS 피드로 병합
 new_feed = Feed(
-    title="Custom Transportation & EV News (Last 7 Days)",
-    link="https://yourdomain.com",
+    title="모빌리티 앱 및 기술 동향 (Last 7 Days)",
+    link="https://mobilityapptrendtracker.com",
     description="Strictly valid mobility & tech news feed",
     language="ko",
     items=items
