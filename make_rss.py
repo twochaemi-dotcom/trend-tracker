@@ -127,7 +127,7 @@ new_feed = Feed(
 )
 
 # XML 파일 저장
-output_filename = "filtered_feed.xml"
+output_filename = "trend_feed.xml"
 try:
     with open(output_filename, "w", encoding="utf-8") as f:
         f.write(new_feed.rss())
