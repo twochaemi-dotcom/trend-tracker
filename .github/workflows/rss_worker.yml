@@ -1,0 +1,34 @@
+name: Update Custom RSS Feed
+
+on:
+  schedule:
+    # 매일 한국 시간 오전 9시(UTC 00:00)에 자동으로 실행됩니다.
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 수동 실행 버튼을 활성화합니다.
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: |
+        pip install feedparser rfeed
+
+    - name: Run RSS script
+      run: python make_rss.py
+
+    - name: Commit and Push changes
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        git add filtered_feed.xml
+        git commit -m "Automated RSS Update" || echo "No changes to commit"
+        git push
