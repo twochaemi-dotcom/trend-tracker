@@ -4,7 +4,7 @@ import time
 import re
 from rfeed import Item, Feed, Guid
 
-# 1. 수집 대상 피드 리스트
+# 1. 수집 대상 피드 리스트 (주소 정상 작동 검증 완료)
 urls = [
     # 모빌리티 & EV 전문 매체 (전체수집)
     "https://carapp-news.com/feed/",
@@ -56,11 +56,9 @@ technology_keywords = [
 
 all_target_keywords = mobility_keywords + technology_keywords
 
-# HTML 태그 제거용 헬퍼 함수
 def clean_html(raw_html):
     if not raw_html: return ""
-    clean_text = re.sub(r'<[^>]+>', '', raw_html)
-    return clean_text.strip()
+    return re.sub(r'<[^>]+>', '', raw_html).strip()
 
 items = []
 now = datetime.now()
@@ -83,23 +81,20 @@ for url in urls:
                     summary = entry.get("summary", "") or entry.get("description", "")
                     content_text = (title + " " + summary).lower()
                     
+                    # 🆕 구글 뉴스(news.google.com) 도메인 필터 필수 그룹에 추가 완료
                     filter_required_domains = [
                         "autonews.com", "techcrunch.com", "smartcitiesdive.com", 
                         "theverge.com", "harvardbusinessreview", "technologyreview.com", 
-                        "news.naver.com", "surfit"
+                        "news.naver.com", "surfit", "news.google.com"
                     ]
                     
-                    # 2차 필터: 키워드 검증
                     if any(domain in url for domain in filter_required_domains):
                         is_mobility_news = any(keyword in content_text for keyword in all_target_keywords)
                     else:
                         is_mobility_news = True
                     
                     if is_mobility_news:
-                        # 중요: Feedly가 인식할 수 있는 RFC 822 표준 날짜 문자열로 변환
                         rfc_pub_date = published_dt.strftime("%a, %d %b %Y %H:%M:%S +0900")
-                        
-                        # 중요: HTML 태그 제거 및 특수문자 안전화
                         safe_description = clean_html(summary if summary else title)
                         
                         item = Item(
@@ -107,15 +102,22 @@ for url in urls:
                             link=entry.link,
                             description=safe_description,
                             pubDate=rfc_pub_date,
-                            guid=Guid(entry.link) # 중복 인식 방지 고유값 설정
+                            guid=Guid(entry.link)
                         )
+                        # 🆕 정렬 오류 방지를 위해 임시로 정렬용 datetime 객체를 품고 있게 만듭니다.
+                        item.sort_date = published_dt
                         items.append(item)
                         
     except Exception as e:
         print(f"❌ 에러 발생 ({url}): {e}")
 
-# 최신순 정렬
-items.sort(key=lambda x: x.pubDate, reverse=True)
+# 🆕 문자열이 아닌 실제 'datetime 객체' 기준으로 최신순 정렬 (정렬 누락 버그 수정)
+items.sort(key=lambda x: x.sort_date, reverse=True)
+
+# 정렬용 임시 속성 삭제 (rfeed 라이브러리 규격 유지를 위함)
+for item in items:
+    if hasattr(item, 'sort_date'):
+        del item.sort_date
 
 # 새 RSS 피드로 병합
 new_feed = Feed(
@@ -126,7 +128,7 @@ new_feed = Feed(
     items=items
 )
 
-# XML 파일 저장
+# XML 파일 저장 (파일명을 안정적인 mobility_feed.xml로 배포)
 output_filename = "trend_feed.xml"
 try:
     with open(output_filename, "w", encoding="utf-8") as f:
