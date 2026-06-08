@@ -42,7 +42,7 @@ urls = [
 mobility_keywords = ['transport', 'car', 'EV', 'AV', 'electronic', 'vehicle', 'autonomous', 'mobility', 'robotaxi', 'fleet', 'automotive', 'OTA', 'Over-the-Air', 'CCS', 'connected car', 'FoD', 'Kakao Mobility', 'SOCAR', 'TMap',
                     '차', '전기차', '자율주행', '모빌리티', '로보택시', '커넥티드카', '카카오모빌리티', '쏘카', '티맵']
 # 필터링할 기술, 서비스 관련 키워드 리스트
-technology_keywords = ['app', 'superapp', 'platform', 'membership', 'fintech', 'subscription', 'subscribe', 'payment', 'AI', 'agent', 'Artificial Intelligence', 'personalization', 'LLM', 'Large Language Model', 'model', 'assistant', 'OS', 'UX'
+technology_keywords = ['app', 'superapp', 'platform', 'membership', 'fintech', 'subscription', 'subscribe', 'payment', 'AI', 'agent', 'Artificial Intelligence', 'personalization', 'LLM', 'Large Language Model', 'model', 'assistant', 'OS', 'UX',
                       '앱', '슈퍼앱', '플랫폼', '멤버십', '핀테크', '구독', '결제', '에이전트', '인공지능', '개인화, '모델', '어시스턴트', '사용자경험']
 
 items = []
