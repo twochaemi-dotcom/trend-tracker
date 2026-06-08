@@ -3,36 +3,31 @@ name: Update RSS Feed
 on:
   schedule:
     - cron: '0 0 * * *' # 매일 자동 실행
-  workflow_dispatch: # 수동 실행 버튼
-
-# 1. 기존에 넣었던 env 강제 명령어는 깨끗하게 지웁니다. (삭제 완료)
+  workflow_dispatch: # 수동 실행 버튼 활성화
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        # 2. @v4 대신 최신 Node.js 24를 공식 지원하는 @v5(혹은 v4의 최신 마이너)로 지정하거나 
-        # 공식 릴리즈 규격에 맞게 유지합니다. 
         uses: actions/checkout@v4
         
       - name: Set up Python
-        # 3. @v5 대신 최신 규격을 지원하는 업데이트 버전을 적용합니다.
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           
-    - name: Install dependencies
-      run: |
-        pip install feedparser rfeed
-
-    - name: Run RSS script
-      run: python make_rss.py
-
-    - name: Commit and Push changes
-      run: |
-        git config --global user.name 'github-actions[bot]'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-        git add trend_feed.xml
-        git commit -m "Automated RSS Update" || echo "No changes to commit"
-        git push
+      - name: Install Dependencies
+        run: |
+          pip install feedparser rfeed
+          
+      - name: Run RSS Script
+        run: |
+          python make_rss.py
+          
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          keep_files: true
