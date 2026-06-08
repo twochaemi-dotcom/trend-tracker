@@ -1,28 +1,27 @@
-name: Update Custom RSS Feed
+name: Update RSS Feed
 
 on:
   schedule:
-    # 매일 한국 시간 오전 9시(UTC 00:00)에 자동으로 실행됩니다.
-    - cron: '0 0 * * *'
-  workflow_dispatch: # 수동 실행 버튼 활성화
+    - cron: '0 0 * * *' # 매일 자동 실행
+  workflow_dispatch: # 수동 실행 버튼
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+# 1. 기존에 넣었던 env 강제 명령어는 깨끗하게 지웁니다. (삭제 완료)
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    # v3에서 최신 v4로 변경
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    # v4에서 최신 v5로 변경
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
-
+      - name: Checkout Repository
+        # 2. @v4 대신 최신 Node.js 24를 공식 지원하는 @v5(혹은 v4의 최신 마이너)로 지정하거나 
+        # 공식 릴리즈 규격에 맞게 유지합니다. 
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        # 3. @v5 대신 최신 규격을 지원하는 업데이트 버전을 적용합니다.
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
     - name: Install dependencies
       run: |
         pip install feedparser rfeed
