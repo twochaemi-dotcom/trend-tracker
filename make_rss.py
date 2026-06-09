@@ -4,6 +4,9 @@ import time
 import re
 from rfeed import Item, Feed, Guid
 
+# 🚨 핵심 조치: 해외 뉴스 사이트들이 깃허브 로봇을 차단하지 못하도록 '일반 크롬 브라우저'로 위장합니다.
+feedparser.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
 # 1. 수집 대상 피드 리스트
 urls = [
     "https://carapp-news.com/feed/",
@@ -43,7 +46,8 @@ def clean_html(raw_html):
 
 raw_items = []
 now = datetime.now()
-one_week_ago = now - timedelta(days=7)
+# 🚨 안전장치 2: 수집 기간을 14일(2주일)로 늘려 데이터 풀을 확보합니다.
+retention_days = now - timedelta(days=14)
 
 print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] RSS 피드 표준화 수집 시작...")
 
@@ -56,7 +60,7 @@ for url in urls:
             if published_parsed:
                 published_dt = datetime.fromtimestamp(time.mktime(published_parsed))
                 
-                if published_dt > one_week_ago:
+                if published_dt > retention_days:
                     title = entry.get("title", "").strip()
                     summary = entry.get("summary", "") or entry.get("description", "")
                     content_text = (title + " " + summary).lower()
@@ -72,7 +76,6 @@ for url in urls:
                         rfc_pub_date = published_dt.strftime("%a, %d %b %Y %H:%M:%S +0900")
                         safe_description = clean_html(summary if summary else title)
                         
-                        # 🆕 정렬 꼬임을 완벽히 막기 위해 튜플 구조(날짜객체, rfeed아이템)로 안전하게 모읍니다.
                         item = Item(
                             title=title,
                             link=entry.link,
@@ -85,23 +88,10 @@ for url in urls:
     except Exception as e:
         print(f"❌ 에러 발생 ({url}): {e}")
 
-# 🆕 실제 datetime 객체 기준으로 정확히 최신순 정렬 후 아이템만 쏙 추출
 raw_items.sort(key=lambda x: x[0], reverse=True)
 items = [target[1] for target in raw_items]
 
-# 새 RSS 피드로 병합
-new_feed = Feed(
-    title="Custom Mobility App and Technology News (Last 7 Days)",
-    link="https://mobilityapptrendtracker.com",
-    description="Strictly valid mobility & tech news feed",
-    language="ko",
-    items=items
-)
-
-output_filename = "trend_feed.xml"
-try:
-    with open(output_filename, "w", encoding="utf-8") as f:
-        f.write(new_feed.rss())
-    print(f"✅ 성공: 총 {len(items)}개의 표준 RSS 항목이 '{output_filename}'에 저장되었습니다.")
-except Exception as e:
-    print(f"❌ 파일 저장 실패: {e}")
+# 🚨 안전장치 3: 그럼에도 불구하고 수집된 기사가 '0개'일 경우 강제로 안내 메시지 아이템을 띄움
+if len(items) == 0:
+    items.append(Item(
+        title="[안내] 현재 수집된 최신 기
