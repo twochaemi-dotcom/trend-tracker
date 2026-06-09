@@ -4,35 +4,26 @@ import time
 import re
 from rfeed import Item, Feed, Guid
 
-# 1. 수집 대상 피드 리스트 (주소 정상 작동 검증 완료)
+# 1. 수집 대상 피드 리스트
 urls = [
-    # 모빌리티 & EV 전문 매체 (전체수집)
     "https://carapp-news.com/feed/",
     "https://electrek.co/feed/",
     "https://www.notateslaapp.com/rss/",
     "https://cleantechnica.com/feed/",
     "https://www.greencarreports.com/news/rss-feed",
     "https://news.google.com/rss/search?q=site:greencarcongress.com&hl=en-US&gl=US&ceid=US:en",
-    
-    # 종합 자동차 및 테크 전문 매체 (선별 수집)
     "https://www.autonews.com/arc/outboundfeeds/sitemap-news/",
     "https://techcrunch.com/category/transportation/feed/",
     "https://www.smartcitiesdive.com/feeds/news/",
-    
-    # 종합 기술 동향 매체 (선별 수집)
     "https://www.theverge.com/rss/index.xml",
     "https://feeds.feedburner.com/harvardbusinessreview",
     "https://www.technologyreview.com/feed/",
     "https://news.google.com/rss/search?q=site:news.naver.com/main/read.nhn%20OR%20site:news.naver.com/article%20%22sid=105%22&hl=ko&gl=KR&ceid=KR:ko",
-    
-    # 종합 앱 동향 매체 (선별 수집)
     "https://news.google.com/rss/search?q=site:surfit.io&hl=ko&gl=KR&ceid=KR:ko",
     "https://techcrunch.com/category/apps/feed/",
     "https://www.lennysnewsletter.com/feed",
     "https://productmindset.substack.com/feed",
     "https://uxdesign.cc/feed",
-    
-    # 키워드 기반 및 전용 앱 피드
     "https://news.google.com/rss/search?q=%22카카오모빌리티%22%20OR%20%22티맵%22%20OR%20%22커넥티드카%22%20OR%20%22쏘카%22&hl=ko&gl=KR&ceid=KR:ko",
     "https://9to5mac.com/guides/carplay/feed",
     "https://9to5google.com/guides/android-auto/feed/",
@@ -42,25 +33,15 @@ urls = [
     "https://news.google.com/rss/search?q=%22My+BMW+app%22+OR+%22BMW+ConnectedDrive%22&hl=en-US&gl=US&ceid=US:en"
 ]
 
-mobility_keywords = [
-    'transport', 'car', 'ev', 'av', 'electronic', 'vehicle', 'autonomous', 'mobility', 'robotaxi', 'fleet', 'automotive', 
-    'ota', 'over-the-air', 'ccs', 'connected car', 'fod', 'kakao mobility', 'socar', 'tmap',
-    '차', '전기차', '자율주행', '모빌리티', '로보택시', '커넥티드카', '카카오모빌리티', '쏘카', '티맵'
-]
-
-technology_keywords = [
-    'app', 'superapp', 'platform', 'membership', 'fintech', 'subscription', 'subscribe', 'payment', 'ai', 'agent', 
-    'artificial intelligence', 'personalization', 'llm', 'large language model', 'model', 'assistant', 'os', 'ux',
-    '앱', '슈퍼앱', '플랫폼', '멤버십', '핀테크', '구독', '결제', '에이전트', '인공지능', '개인화', '모델', '어시스턴트', '사용자경험'
-]
-
+mobility_keywords = ['transport', 'car', 'ev', 'av', 'electronic', 'vehicle', 'autonomous', 'mobility', 'robotaxi', 'fleet', 'automotive', 'ota', 'over-the-air', 'ccs', 'connected car', 'fod', 'kakao mobility', 'socar', 'tmap', '차', '전기차', '자율주행', '모빌리티', '로보택시', '커넥티드카', '카카오모빌리티', '쏘카', '티맵']
+technology_keywords = ['app', 'superapp', 'platform', 'membership', 'fintech', 'subscription', 'subscribe', 'payment', 'ai', 'agent', 'artificial intelligence', 'personalization', 'llm', 'large language model', 'model', 'assistant', 'os', 'ux', '앱', '슈퍼앱', '플랫폼', '멤버십', '핀테크', '구독', '결제', '에이전트', '인공지능', '개인화', '모델', '어시스턴트', '사용자경험']
 all_target_keywords = mobility_keywords + technology_keywords
 
 def clean_html(raw_html):
     if not raw_html: return ""
     return re.sub(r'<[^>]+>', '', raw_html).strip()
 
-items = []
+raw_items = []
 now = datetime.now()
 one_week_ago = now - timedelta(days=7)
 
@@ -75,18 +56,12 @@ for url in urls:
             if published_parsed:
                 published_dt = datetime.fromtimestamp(time.mktime(published_parsed))
                 
-                # 1차 필터: 최근 일주일 이내의 게시글
                 if published_dt > one_week_ago:
                     title = entry.get("title", "").strip()
                     summary = entry.get("summary", "") or entry.get("description", "")
                     content_text = (title + " " + summary).lower()
                     
-                    # 🆕 구글 뉴스(news.google.com) 도메인 필터 필수 그룹에 추가 완료
-                    filter_required_domains = [
-                        "autonews.com", "techcrunch.com", "smartcitiesdive.com", 
-                        "theverge.com", "harvardbusinessreview", "technologyreview.com", 
-                        "news.naver.com", "surfit", "news.google.com"
-                    ]
+                    filter_required_domains = ["autonews.com", "techcrunch.com", "smartcitiesdive.com", "theverge.com", "harvardbusinessreview", "technologyreview.com", "news.naver.com", "surfit", "news.google.com"]
                     
                     if any(domain in url for domain in filter_required_domains):
                         is_mobility_news = any(keyword in content_text for keyword in all_target_keywords)
@@ -97,6 +72,7 @@ for url in urls:
                         rfc_pub_date = published_dt.strftime("%a, %d %b %Y %H:%M:%S +0900")
                         safe_description = clean_html(summary if summary else title)
                         
+                        # 🆕 정렬 꼬임을 완벽히 막기 위해 튜플 구조(날짜객체, rfeed아이템)로 안전하게 모읍니다.
                         item = Item(
                             title=title,
                             link=entry.link,
@@ -104,20 +80,14 @@ for url in urls:
                             pubDate=rfc_pub_date,
                             guid=Guid(entry.link)
                         )
-                        # 🆕 정렬 오류 방지를 위해 임시로 정렬용 datetime 객체를 품고 있게 만듭니다.
-                        item.sort_date = published_dt
-                        items.append(item)
+                        raw_items.append((published_dt, item))
                         
     except Exception as e:
         print(f"❌ 에러 발생 ({url}): {e}")
 
-# 🆕 문자열이 아닌 실제 'datetime 객체' 기준으로 최신순 정렬 (정렬 누락 버그 수정)
-items.sort(key=lambda x: x.sort_date, reverse=True)
-
-# 정렬용 임시 속성 삭제 (rfeed 라이브러리 규격 유지를 위함)
-for item in items:
-    if hasattr(item, 'sort_date'):
-        del item.sort_date
+# 🆕 실제 datetime 객체 기준으로 정확히 최신순 정렬 후 아이템만 쏙 추출
+raw_items.sort(key=lambda x: x[0], reverse=True)
+items = [target[1] for target in raw_items]
 
 # 새 RSS 피드로 병합
 new_feed = Feed(
@@ -128,7 +98,6 @@ new_feed = Feed(
     items=items
 )
 
-# XML 파일 저장 (파일명을 안정적인 mobility_feed.xml로 배포)
 output_filename = "trend_feed.xml"
 try:
     with open(output_filename, "w", encoding="utf-8") as f:
