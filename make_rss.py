@@ -2,14 +2,15 @@ import feedparser
 from datetime import datetime, timedelta
 import time
 import re
+import html  # 🆕 HTML 특수문자(&nbsp; 등) 해독용 파이썬 내장 라이브러리 추가
 from rfeed import Item, Feed, Guid
-from googlenewsdecoder import gnewsdecoder  # 🆕 구글 뉴스 링크 해독 라이브러리 추가
+from googlenewsdecoder import gnewsdecoder
 
 # 방화벽 우회용 브라우저 위장
 feedparser.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 urls = [
-    # 모빌리티 & EV 전문 매체 (전체수집)
+    # 모빌리티 & EV 전문 매체
     "https://carapp-news.com/feed/",
     "https://electrek.co/feed/",
     "https://www.notateslaapp.com/rss/",
@@ -17,18 +18,18 @@ urls = [
     "https://www.greencarreports.com/news/rss-feed",
     "https://news.google.com/rss/search?q=site:greencarcongress.com&hl=en-US&gl=US&ceid=US:en",
     
-    # 종합 자동차 및 테크 전문 매체 (선별 수집)
+    # 종합 자동차 및 테크 전문 매체
     "https://www.autonews.com/arc/outboundfeeds/sitemap-news/",
     "https://techcrunch.com/category/transportation/feed/",
     "https://www.smartcitiesdive.com/feeds/news/",
     
-    # 종합 기술 동향 매체 (선별 수집)
+    # 종합 기술 동향 매체
     "https://www.theverge.com/rss/index.xml",
     "https://feeds.feedburner.com/harvardbusinessreview",
     "https://www.technologyreview.com/feed/",
     "https://news.google.com/rss/search?q=site:news.naver.com/main/read.nhn%20OR%20site:news.naver.com/article%20%22sid=105%22&hl=ko&gl=KR&ceid=KR:ko",
     
-    # 종합 앱 동향 매체 (선별 수집)
+    # 종합 앱 동향 매체
     "https://news.google.com/rss/search?q=site:surfit.io&hl=ko&gl=KR&ceid=KR:ko",
     "https://techcrunch.com/category/apps/feed/",
     "https://www.lennysnewsletter.com/feed",
@@ -49,9 +50,18 @@ mobility_keywords = ['transport', 'car', 'ev', 'av', 'electronic', 'vehicle', 'a
 technology_keywords = ['app', 'superapp', 'platform', 'membership', 'fintech', 'subscription', 'subscribe', 'payment', 'ai', 'agent', 'artificial intelligence', 'personalization', 'llm', 'large language model', 'model', 'assistant', 'os', 'ux', '앱', '슈퍼앱', '플랫폼', '멤버십', '핀테크', '구독', '결제', '에이전트', '인공지능', '개인화', '모델', '어시스턴트', '사용자경험']
 all_target_keywords = mobility_keywords + technology_keywords
 
-def clean_html(raw_html):
-    if not raw_html: return ""
-    return re.sub(r'<[^>]+>', '', raw_html).strip()
+# 🚨 강력한 텍스트 청소기 업그레이드
+def clean_text(raw_text):
+    if not raw_text: return ""
+    # 1. HTML 태그(<...>) 제거
+    text = re.sub(r'<[^>]+>', '', raw_text)
+    # 2. &nbsp; 같은 웹 특수기호 완벽 해독 및 공백 치환
+    text = html.unescape(text)
+    text = text.replace('\xa0', ' ')
+    # 3. 문장 끝에 붙은 네이버 꼬리표 가위질
+    text = re.sub(r'\s*-\s*(네이버|NAVER|Naver)\s*$', '', text, flags=re.IGNORECASE)
+    # 4. 쓸데없이 넓은 공백 1칸으로 압축
+    return re.sub(r'\s+', ' ', text).strip()
 
 raw_items = []
 now = datetime.now()
@@ -69,9 +79,9 @@ for url in urls:
                 published_dt = datetime.fromtimestamp(time.mktime(published_parsed))
                 
                 if published_dt > retention_days:
-                    title = entry.get("title", "").strip()
-                    summary = entry.get("summary", "") or entry.get("description", "")
-                    content_text = (title + " " + summary).lower()
+                    raw_title = entry.get("title", "")
+                    raw_summary = entry.get("summary", "") or entry.get("description", "")
+                    content_text = (raw_title + " " + raw_summary).lower()
                     
                     filter_required_domains = ["autonews.com", "techcrunch.com", "smartcitiesdive.com", "theverge.com", "harvardbusinessreview", "technologyreview.com", "news.naver.com", "surfit", "news.google.com"]
                     
@@ -81,9 +91,13 @@ for url in urls:
                         is_mobility_news = True
                     
                     if is_mobility_news:
-                        safe_description = clean_html(summary if summary else title)
+                        clean_title = clean_text(raw_title)
+                        safe_description = clean_text(raw_summary if raw_summary else raw_title)
                         
-                        # 🚨 1. 구글 뉴스의 암호화된 우회 링크를 순수 원본 링크로 해독 (네이버 차단 뚫기)
+                        # 🚨 유령 기사 필터링: 청소하고 났더니 제목이 아예 없으면 이 기사는 버립니다!
+                        if not clean_title:
+                            continue
+                            
                         final_link = entry.link
                         if "news.google.com" in final_link:
                             try:
@@ -92,16 +106,13 @@ for url in urls:
                                     final_link = decoded["decoded_url"]
                             except Exception:
                                 pass
-                                
-                        # 🚨 2. 보기 싫은 ' - NAVER', ' - 네이버' 꼬리표 제목에서 가위질하기
-                        clean_title = re.sub(r'\s*-\s*(네이버|NAVER|Naver)\s*$', '', title, flags=re.IGNORECASE)
                         
                         item = Item(
                             title=clean_title,
                             link=final_link,
                             description=safe_description,
                             pubDate=published_dt,
-                            guid=Guid(final_link) # 해독된 찐 주소를 고유 ID로 사용
+                            guid=Guid(final_link)
                         )
                         raw_items.append((published_dt, item))
                         
