@@ -49,21 +49,25 @@ mobility_keywords = ['transport', 'car', 'ev', 'av', 'electronic', 'vehicle', 'a
 technology_keywords = ['app', 'superapp', 'platform', 'membership', 'fintech', 'subscription', 'subscribe', 'payment', 'ai', 'agent', 'artificial intelligence', 'personalization', 'llm', 'large language model', 'model', 'assistant', 'os', 'ux', '앱', '슈퍼앱', '플랫폼', '멤버십', '핀테크', '구독', '결제', '에이전트', '인공지능', '개인화', '모델', '어시스턴트', '사용자경험']
 all_target_keywords = mobility_keywords + technology_keywords
 
-# 🚨 끝판왕 텍스트 청소기
+# 🚨 에러 원천 차단: 정규식을 버리고 가장 안전한 텍스트 파싱 방식으로 변경
 def clean_text(raw_text):
     if not raw_text: return ""
+    
+    # 1. HTML 태그 제거 및 특수문자 해독
     text = re.sub(r'<[^>]+>', '', raw_text)
-    text = html.unescape(text)
-    text = text.replace('\xa0', ' ')
+    text = html.unescape(text).replace('\xa0', ' ').strip()
     
-    # 1. 꼬리표가 숨지 못하게 앞뒤 줄바꿈/공백부터 완전히 벗겨냅니다.
-    text = text.strip()
-    
-    # 2. 짧은 대시(-), 긴 대시(–, —), 파이프(|) 뒤에 붙은 네이버를 대소문자 무관하게 싹둑 자릅니다.
-    text = re.sub(r'[\s\-–—|]+(네이버|NAVER|Naver)\s*$', '', text, flags=re.IGNORECASE)
-    
-    # 3. 만약 제목 자체가 ' - NAVER' 이런 식으로만 되어있는 쓰레기 데이터라면 아예 비워버립니다.
-    if re.fullmatch(r'[\s\-–—|]*(네이버|NAVER|Naver)\s*', text, flags=re.IGNORECASE):
+    # 2. 다양한 대시 기호들과 파이프 기호를 표준 공백 분할용으로 정리
+    for dash in ['—', '–', '-', '|']:
+        if dash in text:
+            parts = text.rsplit(dash, 1)  # 맨 오른쪽 대시를 기준으로 분할
+            last_part = parts[1].lower().strip()
+            # 분할된 뒷부분이 '네이버'나 'naver' 관련 단어라면 앞부분만 취함
+            if 'naver' in last_part or '네이버' in last_part:
+                text = parts[0].strip()
+                
+    # 3. 만약 정리 후 껍데기만 남았거나 네이버 텍스트 자체라면 제외하기 위해 빈값 리턴
+    if text.lower().strip() in ['naver', '네이버', '']:
         return ""
         
     return re.sub(r'\s+', ' ', text).strip()
@@ -72,4 +76,84 @@ raw_items = []
 now_utc = datetime.utcnow()
 retention_days = now_utc - timedelta(days=14)
 
-print(f"[{now_utc.strftime('%Y-%m-%d %H:%M:%
+print(f"[{now_utc.strftime('%Y-%m-%d %H:%M:%S')}] RSS 피드 무손실 수집 시작...")
+
+for url in urls:
+    try:
+        feed = feedparser.parse(url)
+        for entry in feed.entries:
+            try: 
+                published_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+                
+                if published_parsed:
+                    published_dt = datetime(*published_parsed[:6])
+                    
+                    if published_dt > retention_days:
+                        raw_title = entry.get("title", "")
+                        raw_summary = entry.get("summary", "") or entry.get("description", "")
+                        content_text = (raw_title + " " + raw_summary).lower()
+                        
+                        filter_required_domains = ["autonews.com", "techcrunch.com", "smartcitiesdive.com", "theverge.com", "harvardbusinessreview", "technologyreview.com", "news.naver.com", "surfit", "news.google.com"]
+                        
+                        if any(domain in url for domain in filter_required_domains):
+                            is_mobility_news = any(keyword in content_text for keyword in all_target_keywords)
+                        else:
+                            is_mobility_news = True
+                        
+                        if is_mobility_news:
+                            clean_title = clean_text(raw_title)
+                            safe_description = clean_text(raw_summary if raw_summary else raw_title)
+                            
+                            if not clean_title:
+                                continue
+                                
+                            final_link = entry.get("link", "https://github.com")
+                            if "news.google.com" in final_link:
+                                try:
+                                    decoded = gnewsdecoder(final_link)
+                                    if decoded and decoded.get("status"):
+                                        final_link = decoded.get("decoded_url", final_link)
+                                except Exception:
+                                    pass
+                            
+                            item = Item(
+                                title=clean_title,
+                                link=final_link,
+                                description=safe_description,
+                                pubDate=published_dt,
+                                guid=Guid(final_link)
+                            )
+                            raw_items.append((published_dt, item))
+            except Exception:
+                continue
+                
+    except Exception as e:
+        print(f"❌ 사이트 접근 실패 ({url}): {e}")
+
+raw_items.sort(key=lambda x: x[0], reverse=True)
+items = [target[1] for target in raw_items]
+
+if len(items) == 0:
+    items.append(Item(
+        title="[안내] 현재 수집된 최신 기사가 없습니다.",
+        link="https://github.com",
+        description="최근 14일 내 조건에 맞는 기사가 없거나 일시적으로 사이트 접근이 지연되었습니다.",
+        pubDate=now_utc,
+        guid=Guid("empty_fallback_item", isPermaLink=False)
+    ))
+
+new_feed = Feed(
+    title="Custom Mobility App and Technology News",
+    link="https://mobilityapptrendtracker.com",
+    description="Strictly valid mobility & tech news feed",
+    language="ko",
+    items=items
+)
+
+output_filename = "trend_feed.xml"
+try:
+    with open(output_filename, "w", encoding="utf-8") as f:
+        f.write(new_feed.rss())
+    print(f"✅ 성공: 총 {len(items)}개의 표준 RSS 항목이 '{output_filename}'에 저장되었습니다.")
+except Exception as e:
+    print(f"❌ 파일 저장 실패: {e}")
