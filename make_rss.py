@@ -4,29 +4,37 @@ import time
 import re
 from rfeed import Item, Feed, Guid
 
-# 🚨 핵심 조치: 해외 뉴스 사이트들이 깃허브 로봇을 차단하지 못하도록 '일반 크롬 브라우저'로 위장합니다.
+# 방화벽 우회용 브라우저 위장
 feedparser.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-# 1. 수집 대상 피드 리스트
 urls = [
+    # 모빌리티 & EV 전문 매체 (전체수집)
     "https://carapp-news.com/feed/",
     "https://electrek.co/feed/",
     "https://www.notateslaapp.com/rss/",
     "https://cleantechnica.com/feed/",
     "https://www.greencarreports.com/news/rss-feed",
     "https://news.google.com/rss/search?q=site:greencarcongress.com&hl=en-US&gl=US&ceid=US:en",
+    
+    # 종합 자동차 및 테크 전문 매체 (선별 수집)
     "https://www.autonews.com/arc/outboundfeeds/sitemap-news/",
     "https://techcrunch.com/category/transportation/feed/",
     "https://www.smartcitiesdive.com/feeds/news/",
+    
+    # 종합 기술 동향 매체 (선별 수집)
     "https://www.theverge.com/rss/index.xml",
     "https://feeds.feedburner.com/harvardbusinessreview",
     "https://www.technologyreview.com/feed/",
     "https://news.google.com/rss/search?q=site:news.naver.com/main/read.nhn%20OR%20site:news.naver.com/article%20%22sid=105%22&hl=ko&gl=KR&ceid=KR:ko",
+    
+    # 종합 앱 동향 매체 (선별 수집)
     "https://news.google.com/rss/search?q=site:surfit.io&hl=ko&gl=KR&ceid=KR:ko",
     "https://techcrunch.com/category/apps/feed/",
     "https://www.lennysnewsletter.com/feed",
     "https://productmindset.substack.com/feed",
     "https://uxdesign.cc/feed",
+    
+    # 키워드 기반 및 전용 앱 피드
     "https://news.google.com/rss/search?q=%22카카오모빌리티%22%20OR%20%22티맵%22%20OR%20%22커넥티드카%22%20OR%20%22쏘카%22&hl=ko&gl=KR&ceid=KR:ko",
     "https://9to5mac.com/guides/carplay/feed",
     "https://9to5google.com/guides/android-auto/feed/",
@@ -46,10 +54,9 @@ def clean_html(raw_html):
 
 raw_items = []
 now = datetime.now()
-# 🚨 안전장치 2: 수집 기간을 14일(2주일)로 늘려 데이터 풀을 확보합니다.
 retention_days = now - timedelta(days=14)
 
-print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] RSS 피드 표준화 수집 시작...")
+print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] RSS 피드 수집 시작...")
 
 for url in urls:
     try:
@@ -73,14 +80,13 @@ for url in urls:
                         is_mobility_news = True
                     
                     if is_mobility_news:
-                        rfc_pub_date = published_dt.strftime("%a, %d %b %Y %H:%M:%S +0900")
                         safe_description = clean_html(summary if summary else title)
                         
                         item = Item(
                             title=title,
                             link=entry.link,
                             description=safe_description,
-                            pubDate=rfc_pub_date,
+                            pubDate=published_dt,  # 🚨 수정됨: 문자열이 아닌 실제 datetime 객체를 전달
                             guid=Guid(entry.link)
                         )
                         raw_items.append((published_dt, item))
@@ -91,7 +97,27 @@ for url in urls:
 raw_items.sort(key=lambda x: x[0], reverse=True)
 items = [target[1] for target in raw_items]
 
-# 🚨 안전장치 3: 그럼에도 불구하고 수집된 기사가 '0개'일 경우 강제로 안내 메시지 아이템을 띄움
 if len(items) == 0:
     items.append(Item(
-        title="[안내] 현재 수집된 최신 기
+        title="[안내] 현재 수집된 최신 기사가 없습니다.",
+        link="https://github.com",
+        description="최근 14일 내 조건에 맞는 기사가 없거나 일시적으로 사이트 접근이 지연되었습니다. 수집기가 정상 작동 중이므로 신규 기사가 올라오면 자동으로 반영됩니다.",
+        pubDate=now,  # 🚨 수정됨: 현재 시간 객체를 그대로 전달
+        guid=Guid("empty_fallback_item", isPermaLink=False)
+    ))
+
+new_feed = Feed(
+    title="Custom Mobility App and Technology News",
+    link="https://mobilityapptrendtracker.com",
+    description="Strictly valid mobility & tech news feed",
+    language="ko",
+    items=items
+)
+
+output_filename = "trend_feed.xml"
+try:
+    with open(output_filename, "w", encoding="utf-8") as f:
+        f.write(new_feed.rss())
+    print(f"✅ 성공: 총 {len(items)}개의 표준 RSS 항목이 '{output_filename}'에 저장되었습니다.")
+except Exception as e:
+    print(f"❌ 파일 저장 실패: {e}")
