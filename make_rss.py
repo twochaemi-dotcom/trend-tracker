@@ -1,8 +1,7 @@
 import feedparser
 from datetime import datetime, timedelta
-import time
 import re
-import html  # 🆕 HTML 특수문자(&nbsp; 등) 해독용 파이썬 내장 라이브러리 추가
+import html
 from rfeed import Item, Feed, Guid
 from googlenewsdecoder import gnewsdecoder
 
@@ -10,7 +9,7 @@ from googlenewsdecoder import gnewsdecoder
 feedparser.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 urls = [
-    # 모빌리티 & EV 전문 매체
+    # 모빌리티 & EV 전문 매체 (전체수집)
     "https://carapp-news.com/feed/",
     "https://electrek.co/feed/",
     "https://www.notateslaapp.com/rss/",
@@ -18,18 +17,18 @@ urls = [
     "https://www.greencarreports.com/news/rss-feed",
     "https://news.google.com/rss/search?q=site:greencarcongress.com&hl=en-US&gl=US&ceid=US:en",
     
-    # 종합 자동차 및 테크 전문 매체
+    # 종합 자동차 및 테크 전문 매체 (선별 수집)
     "https://www.autonews.com/arc/outboundfeeds/sitemap-news/",
     "https://techcrunch.com/category/transportation/feed/",
     "https://www.smartcitiesdive.com/feeds/news/",
     
-    # 종합 기술 동향 매체
+    # 종합 기술 동향 매체 (선별 수집)
     "https://www.theverge.com/rss/index.xml",
     "https://feeds.feedburner.com/harvardbusinessreview",
     "https://www.technologyreview.com/feed/",
     "https://news.google.com/rss/search?q=site:news.naver.com/main/read.nhn%20OR%20site:news.naver.com/article%20%22sid=105%22&hl=ko&gl=KR&ceid=KR:ko",
     
-    # 종합 앱 동향 매체
+    # 종합 앱 동향 매체 (선별 수집)
     "https://news.google.com/rss/search?q=site:surfit.io&hl=ko&gl=KR&ceid=KR:ko",
     "https://techcrunch.com/category/apps/feed/",
     "https://www.lennysnewsletter.com/feed",
@@ -50,74 +49,86 @@ mobility_keywords = ['transport', 'car', 'ev', 'av', 'electronic', 'vehicle', 'a
 technology_keywords = ['app', 'superapp', 'platform', 'membership', 'fintech', 'subscription', 'subscribe', 'payment', 'ai', 'agent', 'artificial intelligence', 'personalization', 'llm', 'large language model', 'model', 'assistant', 'os', 'ux', '앱', '슈퍼앱', '플랫폼', '멤버십', '핀테크', '구독', '결제', '에이전트', '인공지능', '개인화', '모델', '어시스턴트', '사용자경험']
 all_target_keywords = mobility_keywords + technology_keywords
 
-# 🚨 강력한 텍스트 청소기 업그레이드
+# 🚨 에러 원천 차단: 정규식을 버리고 가장 안전한 텍스트 파싱 방식으로 변경
 def clean_text(raw_text):
     if not raw_text: return ""
-    # 1. HTML 태그(<...>) 제거
+    
+    # 1. HTML 태그 제거 및 특수문자 해독
     text = re.sub(r'<[^>]+>', '', raw_text)
-    # 2. &nbsp; 같은 웹 특수기호 완벽 해독 및 공백 치환
-    text = html.unescape(text)
-    text = text.replace('\xa0', ' ')
-    # 3. 문장 끝에 붙은 네이버 꼬리표 가위질
-    text = re.sub(r'\s*-\s*(네이버|NAVER|Naver)\s*$', '', text, flags=re.IGNORECASE)
-    # 4. 쓸데없이 넓은 공백 1칸으로 압축
+    text = html.unescape(text).replace('\xa0', ' ').strip()
+    
+    # 2. 다양한 대시 기호들과 파이프 기호를 표준 공백 분할용으로 정리
+    for dash in ['—', '–', '-', '|']:
+        if dash in text:
+            parts = text.rsplit(dash, 1)  # 맨 오른쪽 대시를 기준으로 분할
+            last_part = parts[1].lower().strip()
+            # 분할된 뒷부분이 '네이버'나 'naver' 관련 단어라면 앞부분만 취함
+            if 'naver' in last_part or '네이버' in last_part:
+                text = parts[0].strip()
+                
+    # 3. 만약 정리 후 껍데기만 남았거나 네이버 텍스트 자체라면 제외하기 위해 빈값 리턴
+    if text.lower().strip() in ['naver', '네이버', '']:
+        return ""
+        
     return re.sub(r'\s+', ' ', text).strip()
 
 raw_items = []
-now = datetime.now()
-retention_days = now - timedelta(days=14)
+now_utc = datetime.utcnow()
+retention_days = now_utc - timedelta(days=14)
 
-print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] RSS 피드 수집 시작...")
+print(f"[{now_utc.strftime('%Y-%m-%d %H:%M:%S')}] RSS 피드 무손실 수집 시작...")
 
 for url in urls:
     try:
         feed = feedparser.parse(url)
         for entry in feed.entries:
-            published_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
-            
-            if published_parsed:
-                published_dt = datetime.fromtimestamp(time.mktime(published_parsed))
+            try: 
+                published_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
                 
-                if published_dt > retention_days:
-                    raw_title = entry.get("title", "")
-                    raw_summary = entry.get("summary", "") or entry.get("description", "")
-                    content_text = (raw_title + " " + raw_summary).lower()
+                if published_parsed:
+                    published_dt = datetime(*published_parsed[:6])
                     
-                    filter_required_domains = ["autonews.com", "techcrunch.com", "smartcitiesdive.com", "theverge.com", "harvardbusinessreview", "technologyreview.com", "news.naver.com", "surfit", "news.google.com"]
-                    
-                    if any(domain in url for domain in filter_required_domains):
-                        is_mobility_news = any(keyword in content_text for keyword in all_target_keywords)
-                    else:
-                        is_mobility_news = True
-                    
-                    if is_mobility_news:
-                        clean_title = clean_text(raw_title)
-                        safe_description = clean_text(raw_summary if raw_summary else raw_title)
+                    if published_dt > retention_days:
+                        raw_title = entry.get("title", "")
+                        raw_summary = entry.get("summary", "") or entry.get("description", "")
+                        content_text = (raw_title + " " + raw_summary).lower()
                         
-                        # 🚨 유령 기사 필터링: 청소하고 났더니 제목이 아예 없으면 이 기사는 버립니다!
-                        if not clean_title:
-                            continue
+                        filter_required_domains = ["autonews.com", "techcrunch.com", "smartcitiesdive.com", "theverge.com", "harvardbusinessreview", "technologyreview.com", "news.naver.com", "surfit", "news.google.com"]
+                        
+                        if any(domain in url for domain in filter_required_domains):
+                            is_mobility_news = any(keyword in content_text for keyword in all_target_keywords)
+                        else:
+                            is_mobility_news = True
+                        
+                        if is_mobility_news:
+                            clean_title = clean_text(raw_title)
+                            safe_description = clean_text(raw_summary if raw_summary else raw_title)
                             
-                        final_link = entry.link
-                        if "news.google.com" in final_link:
-                            try:
-                                decoded = gnewsdecoder(final_link)
-                                if decoded.get("status"):
-                                    final_link = decoded["decoded_url"]
-                            except Exception:
-                                pass
-                        
-                        item = Item(
-                            title=clean_title,
-                            link=final_link,
-                            description=safe_description,
-                            pubDate=published_dt,
-                            guid=Guid(final_link)
-                        )
-                        raw_items.append((published_dt, item))
-                        
+                            if not clean_title:
+                                continue
+                                
+                            final_link = entry.get("link", "https://github.com")
+                            if "news.google.com" in final_link:
+                                try:
+                                    decoded = gnewsdecoder(final_link)
+                                    if decoded and decoded.get("status"):
+                                        final_link = decoded.get("decoded_url", final_link)
+                                except Exception:
+                                    pass
+                            
+                            item = Item(
+                                title=clean_title,
+                                link=final_link,
+                                description=safe_description,
+                                pubDate=published_dt,
+                                guid=Guid(final_link)
+                            )
+                            raw_items.append((published_dt, item))
+            except Exception:
+                continue
+                
     except Exception as e:
-        print(f"❌ 에러 발생 ({url}): {e}")
+        print(f"❌ 사이트 접근 실패 ({url}): {e}")
 
 raw_items.sort(key=lambda x: x[0], reverse=True)
 items = [target[1] for target in raw_items]
@@ -127,7 +138,7 @@ if len(items) == 0:
         title="[안내] 현재 수집된 최신 기사가 없습니다.",
         link="https://github.com",
         description="최근 14일 내 조건에 맞는 기사가 없거나 일시적으로 사이트 접근이 지연되었습니다.",
-        pubDate=now,
+        pubDate=now_utc,
         guid=Guid("empty_fallback_item", isPermaLink=False)
     ))
 
