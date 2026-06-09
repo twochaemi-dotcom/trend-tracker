@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import time
 import re
 from rfeed import Item, Feed, Guid
+from googlenewsdecoder import gnewsdecoder  # 🆕 구글 뉴스 링크 해독 라이브러리 추가
 
 # 방화벽 우회용 브라우저 위장
 feedparser.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -82,12 +83,25 @@ for url in urls:
                     if is_mobility_news:
                         safe_description = clean_html(summary if summary else title)
                         
+                        # 🚨 1. 구글 뉴스의 암호화된 우회 링크를 순수 원본 링크로 해독 (네이버 차단 뚫기)
+                        final_link = entry.link
+                        if "news.google.com" in final_link:
+                            try:
+                                decoded = gnewsdecoder(final_link)
+                                if decoded.get("status"):
+                                    final_link = decoded["decoded_url"]
+                            except Exception:
+                                pass
+                                
+                        # 🚨 2. 보기 싫은 ' - NAVER', ' - 네이버' 꼬리표 제목에서 가위질하기
+                        clean_title = re.sub(r'\s*-\s*(네이버|NAVER|Naver)\s*$', '', title, flags=re.IGNORECASE)
+                        
                         item = Item(
-                            title=title,
-                            link=entry.link,
+                            title=clean_title,
+                            link=final_link,
                             description=safe_description,
-                            pubDate=published_dt,  # 🚨 수정됨: 문자열이 아닌 실제 datetime 객체를 전달
-                            guid=Guid(entry.link)
+                            pubDate=published_dt,
+                            guid=Guid(final_link) # 해독된 찐 주소를 고유 ID로 사용
                         )
                         raw_items.append((published_dt, item))
                         
@@ -101,8 +115,8 @@ if len(items) == 0:
     items.append(Item(
         title="[안내] 현재 수집된 최신 기사가 없습니다.",
         link="https://github.com",
-        description="최근 14일 내 조건에 맞는 기사가 없거나 일시적으로 사이트 접근이 지연되었습니다. 수집기가 정상 작동 중이므로 신규 기사가 올라오면 자동으로 반영됩니다.",
-        pubDate=now,  # 🚨 수정됨: 현재 시간 객체를 그대로 전달
+        description="최근 14일 내 조건에 맞는 기사가 없거나 일시적으로 사이트 접근이 지연되었습니다.",
+        pubDate=now,
         guid=Guid("empty_fallback_item", isPermaLink=False)
     ))
 
