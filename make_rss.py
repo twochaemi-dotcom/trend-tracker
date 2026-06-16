@@ -45,8 +45,39 @@ urls = [
     "https://news.google.com/rss/search?q=%22My+BMW+app%22+OR+%22BMW+ConnectedDrive%22&hl=en-US&gl=US&ceid=US:en"
 ]
 
-mobility_keywords = ['transport', 'car', 'ev', 'av', 'electronic', 'vehicle', 'autonomous', 'mobility', 'robotaxi', 'fleet', 'automotive', 'ota', 'over-the-air', 'ccs', 'connected car', 'fod', 'kakao mobility', 'socar', 'tmap', '차', '전기차', '자율주행', '모빌리티', '로보택시', '커넥티드카', '카카오모빌리티', '쏘카', '티맵']
-technology_keywords = ['app', 'superapp', 'platform', 'membership', 'fintech', 'subscription', 'subscribe', 'payment', 'ai', 'agent', 'artificial intelligence', 'personalization', 'llm', 'large language model', 'model', 'assistant', 'os', 'ux', '앱', '슈퍼앱', '플랫폼', '멤버십', '핀테크', '구독', '결제', '에이전트', '인공지능', '개인화', '모델', '어시스턴트', '사용자경험']
+mobility_keywords = [
+    # Vehicle & HW
+    'EV', 'Electric Vehicle', 'Automotive', 'Battery', 'NACS', 'CCS',
+    '전기차', '배터리', '충전 표준',
+    
+    # AV & Connected (SDV 핵심 영역)
+    'AV', 'Autonomous Driving', 'Robotaxi', 'Autonomous Vehicle', 
+    'Telematics', 'OTA', 'Over-the-Air', 'Connected Car',
+    '자율주행', '로보택시', '커넥티드카', '텔레매틱스', '무선 업데이트',
+    
+    # MaaS & Players
+    'Mobility', 'MaaS', 'Fleet', 'Kakao Mobility', 'Socar', 'Tmap',
+    '모빌리티', '카카오모빌리티', '쏘카', '티맵', '차량공유'
+]
+
+technology_keywords = [
+    # Platform & App Architecture
+    'Superapp', 'Platform', 'OS', 'In-vehicle Infotainment', 'IVI',
+    '슈퍼앱', '플랫폼', '인포테인먼트',
+    
+    # BM & Commerce
+    'FoD', 'Feature on Demand', 'Fintech', 'Payment', 'Subscription', 'Membership',
+    '핀테크', '결제', '구독', '멤버십',
+    
+    # AI & Personalization
+    'AI Agent', 'Artificial Intelligence', 'LLM', 'Large Language Model', 'Personalization', 'Recommendation Engine',
+    '인공지능', 'AI 에이전트', '개인화', '추천 엔진',
+    
+    # UX/UI
+    'UX', 'User Experience', 'HMI', 'Human-Machine Interface',
+    '사용자경험', '인터랙션 디자인'
+]
+
 all_target_keywords = mobility_keywords + technology_keywords
 
 # 🚨 에러 원천 차단: 정규식을 버리고 가장 안전한 텍스트 파싱 방식으로 변경
